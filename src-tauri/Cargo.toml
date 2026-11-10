@@ -1,6 +1,6 @@
 [package]
 name = "sync"
-version = "0.1.0"
+version = "0.2.0"
 description = "Fast, lightweight Google Drive sync for Windows and Linux"
 authors = ["schme16"]
 license = "MIT"
