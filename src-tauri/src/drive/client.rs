@@ -198,8 +198,23 @@ impl Drive {
         }
     }
 
+    /// Like `send`, but also reads the body, re-sending the request when the connection drops
+    /// mid-body. HTTP/2 connections are long-lived and can be torn down while a response is
+    /// streaming (e.g. h2's GOAWAY "too_many_data_frames" guard tripping on Google's framing);
+    /// a retry gets a fresh connection. Malformed JSON is not retried.
     async fn json<T: serde::de::DeserializeOwned>(&self, make: impl Fn(&reqwest::Client) -> Result<RequestBuilder>) -> Result<T> {
-        Ok(self.send(make).await?.json::<T>().await?)
+        let mut attempt = 0u32;
+        loop {
+            match self.send(&make).await?.bytes().await {
+                Ok(body) => return Ok(serde_json::from_slice(&body)?),
+                Err(e) if attempt < 4 => {
+                    tracing::warn!("response body interrupted, retrying: {e}");
+                    backoff(attempt).await;
+                    attempt += 1;
+                }
+                Err(e) => return Err(e.into()),
+            }
+        }
     }
 
     pub async fn about(&self) -> Result<AboutUser> {
