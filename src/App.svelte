@@ -9,6 +9,7 @@
   import Accounts from "./lib/views/Accounts.svelte";
   import Settings from "./lib/views/Settings.svelte";
   import PairEditor from "./lib/components/PairEditor.svelte";
+  import UpdateBanner from "./lib/components/UpdateBanner.svelte";
 
   let error = $state("");
   init().catch((e) => (error = String(e)));
@@ -75,6 +76,7 @@
     </aside>
 
     <main>
+      <UpdateBanner />
       {#key app.view}
         {#if app.view === "overview"}<Overview />
         {:else if app.view === "folders"}<Folders />
@@ -186,6 +188,8 @@
     min-width: 0;
     height: 100%;
     overflow: hidden;
+    display: grid;
+    grid-template-rows: auto minmax(0, 1fr);
   }
   .toasts {
     position: fixed;

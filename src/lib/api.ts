@@ -48,6 +48,8 @@ export interface Config {
   globalIgnore: string;
   googleClientId: string;
   googleClientSecret: string;
+  checkForUpdates: boolean;
+  skippedUpdateVersion: string;
   accounts: Account[];
   pairs: PairConfig[];
 }
@@ -141,6 +143,26 @@ export interface AppInfo {
   hasBuiltinCredentials: boolean;
 }
 
+export interface UpdateInfo {
+  version: string;
+  notes: string;
+  url: string;
+  publishedAt: string;
+  assetName: string | null;
+  assetSize: number;
+  manualReason: string | null;
+}
+
+export interface UpdateState {
+  current: string;
+  checking: boolean;
+  lastCheckedMs: number | null;
+  available: UpdateInfo | null;
+  progress: [number, number] | null;
+  installing: boolean;
+  error: string | null;
+}
+
 export const isTauri = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
 
 async function call<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
@@ -182,6 +204,10 @@ export const api = {
   openInDrive: (pairId: string) => call<void>("open_in_drive", { pairId }),
   appInfo: () => call<AppInfo>("app_info"),
   openLogDir: () => call<void>("open_log_dir"),
+  getUpdateState: () => call<UpdateState>("get_update_state"),
+  checkForUpdates: () => call<UpdateState>("check_for_updates"),
+  skipUpdate: (version: string) => call<void>("skip_update", { version }),
+  installUpdate: () => call<void>("install_update"),
 };
 
 export async function pickDirectory(title: string): Promise<string | null> {

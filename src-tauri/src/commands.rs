@@ -18,6 +18,7 @@ use tauri_plugin_opener::OpenerExt;
 pub struct AppState {
     pub manager: Arc<Manager>,
     pub auth_task: Mutex<Option<tauri::async_runtime::JoinHandle<()>>>,
+    pub updater: Arc<crate::updater::Updater>,
 }
 
 type Res<T> = Result<T, String>;
@@ -51,6 +52,7 @@ pub struct SettingsPatch {
     global_ignore: Option<String>,
     google_client_id: Option<String>,
     google_client_secret: Option<String>,
+    check_for_updates: Option<bool>,
 }
 
 #[tauri::command]
@@ -82,6 +84,9 @@ pub async fn save_settings(state: State<'_, AppState>, patch: SettingsPatch) -> 
         }
         if let Some(v) = patch.use_trash {
             c.use_trash = v;
+        }
+        if let Some(v) = patch.check_for_updates {
+            c.check_for_updates = v;
         }
         if let Some(v) = patch.delete_safety_threshold {
             c.delete_safety_threshold = v;

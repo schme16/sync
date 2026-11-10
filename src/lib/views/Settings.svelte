@@ -1,9 +1,10 @@
 <script lang="ts">
-  import { api, type Config, type Theme } from "../api";
+  import { api, openUrl, type Config, type Theme } from "../api";
   import { app, applyTheme, errText, toast } from "../store.svelte";
   import Icon from "../Icon.svelte";
   import Toggle from "../components/Toggle.svelte";
   import Segmented from "../components/Segmented.svelte";
+  import { ago, bytes } from "../format";
 
   let c = $state(structuredClone($state.snapshot(app.config!)));
 
@@ -20,6 +21,30 @@
   function setTheme(t: Theme) {
     applyTheme(t);
     patch({ theme: t });
+  }
+
+  let upd = $derived(app.update);
+  let checkingNow = $state(false);
+
+  async function checkNow() {
+    checkingNow = true;
+    try {
+      const s = await api.checkForUpdates();
+      app.update = s;
+      if (s.available) app.updateDismissed = null;
+      else toast(`You're on the latest version (${s.current})`, "ok");
+    } catch (e) {
+      toast(`Couldn't check for updates: ${errText(e)}`, "error");
+    }
+    checkingNow = false;
+  }
+
+  async function installNow() {
+    try {
+      await api.installUpdate();
+    } catch (e) {
+      toast(`Update failed: ${errText(e)}`, "error");
+    }
   }
 
   function num(key: keyof Config, min: number, max: number) {
@@ -105,6 +130,55 @@
     </div>
   </section>
 
+  <section>
+    <h2 class="section-title">Updates</h2>
+    <div class="card group">
+      <div class="item">
+        <div>
+          {#if upd?.installing}
+            <div class="label">Installing Sync {upd.available?.version}…</div>
+            <div class="hint">Sync will close and reopen in a moment.</div>
+          {:else if upd?.progress}
+            <div class="label">Downloading Sync {upd.available?.version}…</div>
+            <div class="hint">{bytes(upd.progress[0])} of {bytes(upd.progress[1])}</div>
+          {:else if upd?.available}
+            <div class="label">Sync {upd.available.version} is available</div>
+            <div class="hint">
+              You have {upd.current}.
+              {#if upd.available.manualReason}{upd.available.manualReason}{:else}It downloads from GitHub, is checked against its published SHA-256, and Sync restarts on the new version.{/if}
+            </div>
+          {:else}
+            <div class="label">Sync {upd?.current ?? app.info?.version}</div>
+            <div class="hint">
+              {#if upd?.checking || checkingNow}Checking GitHub for a newer version…
+              {:else if upd?.error}Last check failed: {upd.error}
+              {:else if upd?.lastCheckedMs}Up to date · checked {ago(upd.lastCheckedMs)}
+              {:else}Not checked yet this session.{/if}
+            </div>
+          {/if}
+        </div>
+        <div class="row actions">
+          {#if upd?.available && !upd.progress && !upd.installing}
+            {#if upd.available.manualReason}
+              <button class="btn" onclick={() => openUrl(upd!.available!.url)}><Icon name="external" size={15} /> Release page</button>
+            {:else}
+              <button class="btn ghost" onclick={() => openUrl(upd!.available!.url)}>What's new</button>
+              <button class="btn primary" onclick={installNow}>Install and restart</button>
+            {/if}
+          {:else if !upd?.progress && !upd?.installing}
+            <button class="btn" disabled={checkingNow || upd?.checking} onclick={checkNow}>
+              <Icon name="sync" size={15} class={checkingNow || upd?.checking ? "spin" : ""} /> Check for updates
+            </button>
+          {/if}
+        </div>
+      </div>
+      <div class="item">
+        <div><div class="label">Check for updates automatically</div><div class="hint">Look for a new release on GitHub shortly after start and every few hours. You're always asked before anything is installed.</div></div>
+        <Toggle bind:checked={c.checkForUpdates} onchange={(v) => patch({ checkForUpdates: v })} label="Check for updates automatically" />
+      </div>
+    </div>
+  </section>
+
   {#if app.info}
     <section>
       <h2 class="section-title">About</h2>
@@ -146,6 +220,10 @@
   .item .hint {
     margin-top: 2px;
     max-width: 520px;
+  }
+  .actions {
+    gap: 8px;
+    flex: none;
   }
   .num {
     width: 96px;

@@ -138,6 +138,10 @@ pub struct Config {
     pub global_ignore: String,
     pub google_client_id: String,
     pub google_client_secret: String,
+    /// Look for new releases on GitHub in the background.
+    pub check_for_updates: bool,
+    /// A version the user chose to skip; automatic checks stay quiet about it.
+    pub skipped_update_version: String,
     pub accounts: Vec<Account>,
     pub pairs: Vec<PairConfig>,
 }
@@ -159,6 +163,8 @@ impl Default for Config {
             global_ignore: DEFAULT_GLOBAL_IGNORE.to_string(),
             google_client_id: String::new(),
             google_client_secret: String::new(),
+            check_for_updates: true,
+            skipped_update_version: String::new(),
             accounts: Vec::new(),
             pairs: Vec::new(),
         }

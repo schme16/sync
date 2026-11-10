@@ -67,6 +67,8 @@ const config: Config = {
   globalIgnore: DEFAULT_RULES,
   googleClientId: "1234-example.apps.googleusercontent.com",
   googleClientSecret: "secret",
+  checkForUpdates: true,
+  skippedUpdateVersion: "",
   accounts: [{ id: "a1", email: "you@example.com", displayName: "Alex Example", photoLink: "" }],
   pairs,
 };
@@ -165,6 +167,18 @@ export function mockListen(event: string, cb: (p: unknown) => void) {
   return () => listeners.get(event)!.delete(cb);
 }
 
+const mockUpdate = {
+  version: "0.2.0",
+  notes: "## What's new\n- Update checks and one-click updates\n- Faster first scan on large folders",
+  url: "https://github.com/schme16/sync/releases",
+  publishedAt: new Date().toISOString(),
+  assetName: "Sync_0.2.0_x64-setup.exe",
+  assetSize: 5_170_000,
+  manualReason: null,
+};
+const update = { current: "0.1.0", checking: false, lastCheckedMs: null as number | null, available: mockUpdate as typeof mockUpdate | null, progress: null as [number, number] | null, installing: false, error: null as string | null };
+const pushUpdate = () => emit("update", structuredClone(update));
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export async function mockInvoke<T>(cmd: string, args: Record<string, any> = {}): Promise<T> {
@@ -181,6 +195,29 @@ export async function mockInvoke<T>(cmd: string, args: Record<string, any> = {})
       return structuredClone(activity) as T;
     case "app_info":
       return { version: "0.1.0", os: "windows", configDir: "C:\\Users\\me\\AppData\\Roaming\\schme16-sync", dataDir: "C:\\Users\\me\\AppData\\Local\\schme16-sync", logDir: "C:\\Users\\me\\AppData\\Local\\schme16-sync\\logs", hasBuiltinCredentials: false } as T;
+    case "get_update_state":
+      return structuredClone(update) as T;
+    case "check_for_updates":
+      update.checking = true;
+      pushUpdate();
+      await sleep(900);
+      Object.assign(update, { checking: false, lastCheckedMs: Date.now(), available: mockUpdate });
+      pushUpdate();
+      return structuredClone(update) as T;
+    case "skip_update":
+      config.skippedUpdateVersion = args.version;
+      update.available = null;
+      pushUpdate();
+      return undefined as T;
+    case "install_update":
+      for (let done = 0; done <= mockUpdate.assetSize; done += 650_000) {
+        update.progress = [Math.min(done, mockUpdate.assetSize), mockUpdate.assetSize];
+        pushUpdate();
+        await sleep(250);
+      }
+      update.installing = true;
+      pushUpdate();
+      return undefined as T;
     case "drive_root":
       return { id: "root", name: "My Drive", driveId: null } as T;
     case "list_shared_drives":

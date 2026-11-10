@@ -23,6 +23,7 @@ It was built as a replacement for Insync. It keeps the parts that matter: `.giti
 - **Integrity**: downloads are MD5-verified against Drive's checksum, written to a temp file, then atomically renamed into place. Files that change mid-transfer are retried rather than recorded.
 - Resumable uploads for large files, exponential backoff for rate limits, automatic token refresh
 - Shared drives, multiple Google accounts, light/dark/auto themes, tray icon, launch at sign-in
+- **Updates from GitHub releases**: checks shortly after start and every 6 hours (or on demand from Settings or the tray), shows a banner when a new version is out, and installs it with one click. The download is verified against GitHub's SHA-256 digest, syncing stops cleanly, and Sync restarts on the new version. This works with the setup `.exe`, the `.msi` and the AppImage; `.deb` installs get a link to the release page.
 
 ## OS-specific tricks
 
@@ -82,7 +83,7 @@ cargo test --manifest-path src-tauri/Cargo.toml    # engine tests
 npm run dev                             # UI only, in a browser, with mock data
 ```
 
-Pushing a `v*` tag builds Windows and Linux artifacts in GitHub Actions and attaches them to a draft release.
+Pushing a `v*` tag builds Windows and Linux artifacts in GitHub Actions and attaches them to a draft release. The build takes its version from the tag, so you don't need to bump it by hand. Running copies only see a release once you **publish** the draft.
 
 ## Files
 

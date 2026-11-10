@@ -13,6 +13,7 @@ mod model;
 mod remote_tree;
 mod scanner;
 mod secrets;
+mod updater;
 mod watcher;
 
 use commands::AppState;
@@ -64,12 +65,28 @@ fn init_logging(paths: &AppPaths) -> Option<tracing_appender::non_blocking::Work
     Some(guard)
 }
 
-fn build_tray(app: &tauri::App, manager: Arc<Manager>) -> tauri::Result<()> {
+/// The tray's update entry: "Check for updates", or "Install update x.y.z…" once one is found.
+struct UpdateMenu(MenuItem<tauri::Wry>);
+
+pub(crate) fn refresh_update_menu(app: &AppHandle, available: Option<&str>) {
+    if let Some(m) = app.try_state::<UpdateMenu>() {
+        let text = match available {
+            Some(v) => format!("Install update {v}…"),
+            None => "Check for updates".to_string(),
+        };
+        let _ = m.0.set_text(text);
+    }
+}
+
+fn build_tray(app: &tauri::App, manager: Arc<Manager>, updater: Arc<updater::Updater>) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Sync", true, None::<&str>)?;
     let sync = MenuItem::with_id(app, "sync", "Sync now", true, None::<&str>)?;
     let pause = MenuItem::with_id(app, "pause", "Pause syncing", true, None::<&str>)?;
+    let update = MenuItem::with_id(app, "update", "Check for updates", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit", true, None::<&str>)?;
-    let menu = Menu::with_items(app, &[&open, &sync, &pause, &PredefinedMenuItem::separator(app)?, &quit])?;
+    let sep = PredefinedMenuItem::separator(app)?;
+    let menu = Menu::with_items(app, &[&open, &sync, &pause, &sep, &update, &PredefinedMenuItem::separator(app)?, &quit])?;
+    app.manage(UpdateMenu(update));
     let pause_item = pause.clone();
     let mut builder = TrayIconBuilder::with_id("main").tooltip("Sync").menu(&menu).show_menu_on_left_click(false);
     if let Some(icon) = app.default_window_icon() {
@@ -83,6 +100,19 @@ fn build_tray(app: &tauri::App, manager: Arc<Manager>) -> tauri::Result<()> {
                 let now = !manager.shared.hub.paused_all.load(std::sync::atomic::Ordering::Relaxed);
                 manager.set_paused_all(now);
                 let _ = pause_item.set_text(if now { "Resume syncing" } else { "Pause syncing" });
+            }
+            "update" => {
+                // Show the window when an update is (or turns out to be) available; the banner offers to install it.
+                if updater.state().available.is_some() {
+                    show_main(app);
+                } else {
+                    let (u, app) = (updater.clone(), app.clone());
+                    tauri::async_runtime::spawn(async move {
+                        if u.check(None).await.available.is_some() {
+                            show_main(&app);
+                        }
+                    });
+                }
             }
             "quit" => {
                 let m = manager.clone();
@@ -119,9 +149,11 @@ pub fn run() {
             let hub = hub::Hub::new(app.handle().clone());
             hub.spawn_ticker();
             let shared = Shared::new(hub, Arc::new(paths), Arc::new(RwLock::new(config)), drive::client::http_client());
+            let updater = updater::Updater::new(app.handle().clone(), shared.http.clone());
             let manager = Manager::new(shared);
-            app.manage(AppState { manager: manager.clone(), auth_task: Mutex::new(None) });
-            build_tray(app, manager.clone())?;
+            app.manage(AppState { manager: manager.clone(), auth_task: Mutex::new(None), updater: updater.clone() });
+            build_tray(app, manager.clone(), updater.clone())?;
+            updater.spawn_auto_check(manager.clone());
             if !minimized {
                 show_main(app.handle());
             }
@@ -155,6 +187,10 @@ pub fn run() {
             commands::open_in_drive,
             commands::app_info,
             commands::open_log_dir,
+            updater::get_update_state,
+            updater::check_for_updates,
+            updater::skip_update,
+            updater::install_update,
         ])
         .build(tauri::generate_context!())
         .expect("error while building the application");

@@ -50,6 +50,15 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: 22, cache: npm }
       - run: npm ci
+      - name: Use the tag's version
+        # The app compares this version with GitHub releases to offer updates, so it must match the tag.
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: bash
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          sed -i.bak -E "0,/^version = \".*\"/s//version = \"$v\"/" src-tauri/Cargo.toml
+          node -e 'for (const f of ["src-tauri/tauri.conf.json","package.json"]) { const fs=require("fs"); const j=JSON.parse(fs.readFileSync(f,"utf8")); j.version=process.argv[1]; fs.writeFileSync(f, JSON.stringify(j,null,2)+"\n"); }' "$v"
+          grep -m1 '^version' src-tauri/Cargo.toml
       - name: Build
         env:
           # Optional: bake default OAuth credentials into release builds (repository secrets).

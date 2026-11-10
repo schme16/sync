@@ -1,4 +1,4 @@
-import { api, on, setWindowTheme, type ActivityItem, type AppInfo, type Config, type Snapshot, type Theme } from "./api";
+import { api, on, setWindowTheme, type ActivityItem, type AppInfo, type Config, type Snapshot, type Theme, type UpdateState } from "./api";
 
 export type View = "overview" | "folders" | "activity" | "rules" | "accounts" | "settings";
 
@@ -20,6 +20,9 @@ export const app = $state({
   editingPair: null as string | null,
   activityFilter: null as string | null,
   resolvedTheme: "light" as "light" | "dark",
+  update: null as UpdateState | null,
+  /** version whose banner was dismissed with "Later" this session */
+  updateDismissed: null as string | null,
 });
 
 let toastId = 0;
@@ -49,7 +52,15 @@ export async function reloadConfig() {
 }
 
 export async function init() {
-  const [config, snapshot, activity, info] = await Promise.all([api.getConfig(), api.getSnapshot(), api.getActivity(1500), api.appInfo()]);
+  const [config, snapshot, activity, info, update] = await Promise.all([
+    api.getConfig(),
+    api.getSnapshot(),
+    api.getActivity(1500),
+    api.appInfo(),
+    api.getUpdateState(),
+  ]);
+  app.update = update;
+  await on<UpdateState>("update", (u) => (app.update = u));
   app.config = config;
   app.snapshot = snapshot;
   app.activity = activity;
